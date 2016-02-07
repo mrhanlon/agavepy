@@ -5,10 +5,12 @@ import os
 import shelve
 from contextlib import closing
 import json
+import time
 
 import jinja2
 import dateutil.parser
 import requests
+from sqlitedict import SqliteDict
 
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -79,6 +81,15 @@ def with_refresh(client, f, *args, **kwargs):
                 exc_json = exc.response.json()
                 # if so, check if it is an expired token error (new versions of APIM return JSON errors):
                 if 'Invalid Credentials' in exc_json.get('fault').get('message'):
+                    # check to see if token cache is different:
+                    if not (client.token_cache.read_token_data()['access_token'] ==
+                    client.token.token_info['access_token']):
+                        client.token.token_info = client.token_cache.read_token_data()
+                        client._token = client.token.token_info['access_token']
+                        client._refresh_token = client.token.token_info['refresh_token']
+                        client.refresh_aris()
+                        if time.time() < client.token.token_info['expiration'] + 5:
+                            return f(*args, **kwargs)
                     client.token.refresh()
                     return f(*args, **kwargs)
                 #  otherwise, return the JSON
@@ -93,6 +104,27 @@ def with_refresh(client, f, *args, **kwargs):
         client.token.refresh()
         return f(*args, **kwargs)
 
+
+class TokenCache(object):
+    """Cache and persist tokens for a client."""
+    def __init__(self, client):
+        self.db_path = os.path.join(os.path.dirname(Agave.agpy_path()), '.agpy_cache')
+        self.db = SqliteDict(self.db_path, autocommit=True)
+        self.parent = client
+
+    def get_key(self):
+        key = self.parent.api_key
+        if hasattr(self.parent, 'username') and self.parent.username:
+             key = '{}_{}'.format(key, self.parent.username)
+        return key
+
+    def read_token_data(self):
+        """Read token information for a client from the cache."""
+        return self.db[self.get_key()]
+
+    def set_token_data(self):
+        """Save the token information associated with a client to the cache."""
+        self.db[self.get_key()] = self.parent.token.token_info
 
 class ConfigGen(object):
     def __init__(self, template_str):
@@ -125,11 +157,21 @@ class Token(object):
         self.token_url = urlparse.urljoin(self.api_server, 'token')
 
     def _token(self, data):
+        """Make a request to the token endpoint, either to create or refresh"""
         auth = requests.auth.HTTPBasicAuth(self.api_key, self.api_secret)
         resp = requests.post(self.token_url, data=data, auth=auth,
                              verify=self.verify)
         resp.raise_for_status()
         self.token_info = resp.json()
+        try:
+            expires_in = int(self.token_info.get('expires_in'))
+        except ValueError:
+            expires_in = 3600
+        created_at = int(time.time())
+        self.token_info['created_at'] = created_at
+        self.token_info['expiration'] = created_at + expires_in
+        self.token_info['expires_at'] = time.ctime(created_at + expires_in)
+        self.parent.token_cache.set_token_data()
         token = self.token_info['access_token']
         # Notify parent that a token was created
         self.parent._token = token
@@ -194,11 +236,19 @@ class Agave(object):
                 and self.api_key is None and self.api_secret is None):
             self.api_key, self.api_secret = recover(self.client_name)
         self.token = None
+        self.token_cache = TokenCache(self)
         if self.api_key is not None and self.api_secret is not None and self.jwt is None:
             self.set_client(self.api_key, self.api_secret)
         self.clients_resource = None
         self.all = None
         self.refresh_aris()
+        if self._token and not self.username:
+            # try to retrieve the username associated with the token, but the token
+            # could be expired, profiles may fail, etc,
+            try:
+                self.username = self.profiles.listByUsername(username='me').username
+            except Exception:
+                pass
 
     def to_dict(self):
         """Return a dictionary representing this client."""
@@ -310,12 +360,23 @@ class Agave(object):
         """
         self.api_key = key
         self.api_secret = secret
+        # check token cache for a valid token:
+        try:
+            token_info = self.token_cache.read_token_data()
+        except KeyError:
+            # it's possible a cache entry doesn't exist yet; except the key error.
+            token_info = None
+        if token_info and time.time() < token_info['expiration']:
+            self._token = token_info['access_token']
+            self._refresh_token = token_info['refresh_token']
         self.token = Token(
             self.username, self.password,
             self.api_server, self.api_key, self.api_secret,
             self.verify,
             self, self._token, self._refresh_token)
-        if self._token and self._refresh_token:
+        if token_info:
+            self.token.token_info = token_info
+        elif self._token and self._refresh_token:
             pass
         else:
             self.token.create()
