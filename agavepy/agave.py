@@ -108,7 +108,11 @@ def with_refresh(client, f, *args, **kwargs):
 class TokenCache(object):
     """Cache and persist tokens for a client."""
     def __init__(self, client):
-        self.db_path = os.path.join(os.path.dirname(Agave.agpy_path()), '.agpy_cache')
+        if Agave.agpy_path():
+            base_path = os.path.dirname(Agave.agpy_path())
+        else:
+            base_path = os.path.expanduser('~/')
+        self.db_path = os.path.join(base_path, '.agpy_cache')
         self.db = SqliteDict(self.db_path, autocommit=True)
         self.parent = client
 
