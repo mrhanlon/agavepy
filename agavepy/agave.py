@@ -82,9 +82,10 @@ def with_refresh(client, f, *args, **kwargs):
                 # if so, check if it is an expired token error (new versions of APIM return JSON errors):
                 if 'Invalid Credentials' in exc_json.get('fault').get('message'):
                     # check to see if token cache is different:
-                    if not (client.token_cache.read_token_data()['access_token'] ==
+                    cache_info = client.token_cache.read_token_data()
+                    if cache_info and not (cache_info.get('access_token') ==
                     client.token.token_info['access_token']):
-                        client.token.token_info = client.token_cache.read_token_data()
+                        client.token.token_info = cache_info
                         client._token = client.token.token_info['access_token']
                         client._refresh_token = client.token.token_info['refresh_token']
                         client.refresh_aris()
@@ -124,7 +125,7 @@ class TokenCache(object):
 
     def read_token_data(self):
         """Read token information for a client from the cache."""
-        return self.db[self.get_key()]
+        return self.db.get(self.get_key())
 
     def set_token_data(self):
         """Save the token information associated with a client to the cache."""
