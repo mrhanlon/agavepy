@@ -75,7 +75,7 @@ class Operation(object):
             # Turn list params into comma separated values
             if isinstance(value, list):
                 value = ",".join(value)
-            if value:
+            if value is not None:
                 param_type = param['paramType']
                 if param_type == 'path':
                     uri = uri.replace('{%s}' % pname, str(value))
@@ -94,8 +94,6 @@ class Operation(object):
                     raise AssertionError(
                         "Unsupported paramType %s" %
                         param_type)
-                del kwargs[pname]
-            elif ptype == 'boolean' and kwargs.has_key(pname):
                 del kwargs[pname]
             else:
                 if param['required']:
