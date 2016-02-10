@@ -1,5 +1,5 @@
 {
-  "name": "pysdk_testsuite",
+  "name": "python-sdk-test-job",
   "appId": "endofday-local-0.0.1",
   "inputs": {
     "wf": ["agave://endofday.local.storage.com//data/algebra.yml"]
