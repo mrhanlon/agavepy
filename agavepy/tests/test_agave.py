@@ -374,6 +374,41 @@ def test_notification_to_url(agave, credentials, test_storage_system):
     # delete the notification
     agave.notifications.delete(uuid=n.id)
 
+def test_multiple_clients(agave, credentials):
+    # create another client with same username/password & client key/secret
+    ag = a.Agave(username=credentials['username'],
+                  password=credentials['password'],
+                  api_server=credentials['apiserver'],
+                  api_key=credentials['apikey'],
+                  api_secret=credentials['apisecret'],
+                  verify=credentials.get('verify_certs', True))
+    # use the original client to list apps
+    apps = agave.apps.list()
+    for app in apps:
+        validate_app(app)
+    # create another client with same client key & secret but just access and refresh token
+    ag2 = a.Agave(token=agave.token.token_info['access_token'],
+                  refresh_token=agave.token.token_info['refresh_token'],
+                  password=credentials['password'],
+                  api_server=credentials['apiserver'],
+                  api_key=credentials['apikey'],
+                  api_secret=credentials['apisecret'],
+                  verify=credentials.get('verify_certs', True))
+    # use ag to list apps; this should use the cached token
+    ag.apps.list()
+    # use ag2 to list apps.
+    ag2.apps.list()
+    # now, explicitly refresh the token for the original client
+    agave.token.refresh()
+    # check that all clients still work using the new token
+    agave.apps.list()
+    ag.apps.list()
+    ag2.apps.list()
+    # check tokens for each -- they should be the same.
+    assert agave.token.token_info['access_token'] == ag.token.token_info['access_token']
+    assert ag.token.token_info['access_token'] == ag2.token.token_info['access_token']
+
+
 def test_token_access(agave, credentials):
     token = agave.token.refresh()
     token_client = a.Agave(api_server=credentials['apiserver'],
