@@ -365,22 +365,18 @@ class Agave(object):
         """
         self.api_key = key
         self.api_secret = secret
-        # check token cache for a valid token:
-        try:
-            token_info = self.token_cache.read_token_data()
-        except KeyError:
-            # it's possible a cache entry doesn't exist yet; except the key error.
-            token_info = None
-        if token_info and time.time() < token_info['expiration']:
-            self._token = token_info['access_token']
-            self._refresh_token = token_info['refresh_token']
         self.token = Token(
             self.username, self.password,
             self.api_server, self.api_key, self.api_secret,
             self.verify,
             self, self._token, self._refresh_token)
-        if token_info:
+        # check token cache for a valid token:
+        token_info = self.token_cache.read_token_data()
+        if token_info and time.time() + 5 < token_info['expiration']:
+            self._token = token_info['access_token']
+            self._refresh_token = token_info['refresh_token']
             self.token.token_info = token_info
+        # if a token was passed to the agave constructor, use that.
         elif self._token and self._refresh_token:
             pass
         else:
@@ -396,6 +392,30 @@ class Agave(object):
         return with_refresh(self.client, f, url,
                             headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
                             verify=self.verify)
+
+    def download_uri(self, uri, path):
+        """Convenience method to download an agave URL or jobs output URL to an
+        absolute `path` on the local file system."""
+        if uri.startswith('http') and 'jobs' in uri and '/outputs/media/' in uri:
+            # assume job output uri:
+            download_url = uri
+        elif 'agave://' in uri:
+            # assume it is an agave uri
+            system_id, path = uri.split('agave://')[1].split('/', 1)
+            download_url = '{}/files/v2/media/system/{}/{}'.format(self.api_server, system_id, path)
+        else:
+            raise AgaveError("Unsupported URI.")
+        f = requests.get
+        with open(path, 'wb') as loc:
+            rsp = with_refresh(self.client, f, download_url,
+                               headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
+                               verify=self.verify)
+            if type(rsp) == dict:
+                raise AgaveError("Error downloading file at URI: {}, Response: {}".format(uri, rsp))
+            for block in rsp.iter_content(1024):
+                if not block:
+                    break
+                loc.write(block)
 
     def __getattr__(self, key):
         return Resource(key, client=self)
