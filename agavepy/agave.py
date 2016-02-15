@@ -393,12 +393,17 @@ class Agave(object):
                             headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
                             verify=self.verify)
 
-    def download_uri(self, uri, path):
+    def download_uri(self, uri, local_path):
         """Convenience method to download an agave URL or jobs output URL to an
         absolute `path` on the local file system."""
-        if uri.startswith('http') and 'jobs' in uri and '/outputs/media/' in uri:
+        if uri.startswith('http') and 'jobs' in uri:
             # assume job output uri:
-            download_url = uri
+            if '/outputs/listings/' in uri:
+                download_url = uri.replace('listings', 'media')
+            elif '/outputs/media/' in uri:
+                download_url = uri
+            else:
+                raise AgaveError("Unsupported jobs URI.")
         elif 'agave://' in uri:
             # assume it is an agave uri
             system_id, path = uri.split('agave://')[1].split('/', 1)
@@ -406,7 +411,7 @@ class Agave(object):
         else:
             raise AgaveError("Unsupported URI.")
         f = requests.get
-        with open(path, 'wb') as loc:
+        with open(local_path, 'wb') as loc:
             rsp = with_refresh(self.client, f, download_url,
                                headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
                                verify=self.verify)
