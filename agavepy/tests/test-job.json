@@ -1,6 +1,6 @@
 {
   "name": "python-sdk-test-job",
-  "appId": "endofday-local-0.0.1",
+  "appId": "python-sdk-test-app-jfs-0.0.1",
   "inputs": {
     "wf": ["agave://endofday.local.storage.com//data/algebra.yml"]
   },
