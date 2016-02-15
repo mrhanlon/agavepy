@@ -180,6 +180,30 @@ def test_upload_binary_file(agave, credentials):
     status = arsp.result(timeout=120)
     assert status == 'COMPLETE'
 
+def test_download_agave_uri(agave, credentials):
+    remote_path = '{}/test_file_upload_python_sdk'.format(credentials['storage_user'])
+    local_path = os.path.join(HERE, 'local_test_download')
+    uri = 'agave://{}/{}'.format(credentials['storage'], remote_path)
+    rsp = agave.download_uri(uri, local_path)
+    assert os.path.exists(local_path)
+    os.remove(local_path)
+
+def test_download_job_output_listings_uri(agave):
+    local_path = os.path.join(HERE, 'local_test_download_job')
+    # todo - update to make tenant-agnostic.
+    uri = 'https://public.tenants.prod.agaveapi.co/jobs/v2/412474231577973221-242ac113-0001-007/outputs/listings/algebra/sum/data/out.txt'
+    agave.download_uri(uri, local_path)
+    assert os.path.exists(local_path)
+    os.remove(local_path)
+
+def test_download_job_output_media_uri(agave):
+    local_path = os.path.join(HERE, 'local_test_download_job')
+    # todo - update to make tenant-agnostic.
+    uri = 'https://public.tenants.prod.agaveapi.co/jobs/v2/412474231577973221-242ac113-0001-007/outputs/media/algebra/sum/data/out.txt'
+    agave.download_uri(uri, local_path)
+    assert os.path.exists(local_path)
+    os.remove(local_path)
+
 def test_list_uploaded_file(agave, credentials):
     files = agave.files.list(filePath=credentials['storage_user'], systemId=credentials['storage'])
     for f in files:
@@ -213,6 +237,10 @@ def test_list_jobs(agave):
 def test_submit_job(agave, test_job):
     job = agave.jobs.submit(body=test_job)
     validate_job(job)
+    # create an async object
+    arsp = AgaveAsyncResponse(agave, job)
+    # block until job finishes with a timeout of 3 minutes.
+    assert arsp.result(180) == 'COMPLETE'
 
 def test_get_profile(agave, credentials):
     prof = agave.profiles.get()
