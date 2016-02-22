@@ -79,7 +79,10 @@ def with_refresh(client, f, *args, **kwargs):
             try:
                 # Try to see if it's a json response,
                 exc_json = exc.response.json()
-                # if so, check if it is an expired token error (new versions of APIM return JSON errors):
+                # if using jwt auth, ignore token refresh stuff, and return JSON
+                if client.jwt:
+                    return exc.response
+                # otherwise, check if it is an expired token error (new versions of APIM return JSON errors):
                 if 'Invalid Credentials' in exc_json.get('fault').get('message'):
                     # check to see if token cache is different:
                     cache_info = client.token_cache.read_token_data()
