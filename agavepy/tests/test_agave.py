@@ -6,8 +6,17 @@
 #
 # 2. update the test-storage.json, test-compute.json, test-app.json and test-job.json
 #
-# 3. run with py.test from the cwd.
+# 3. To run the tests, use the following from the tests directory with the requrements.txt installed (or activate a
+#    virtualenv with the requirements):
 #
+#    py.test                            -- Run all tests
+#    py.test test_agave.py::<test_name> -- Run a single test whose name is <test_name>
+#    py.test -k <string>                -- Run all tests with <string> in the name.
+#
+#    Examples:
+#    py.test test_agave.py::test_list_single_job_many_times
+#    py.test -k jobs
+
 
 import datetime
 import json
@@ -25,8 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture(scope='session')
 def credentials():
+    credentials_file = os.environ.get('creds', 'test_credentials.json')
     return json.load(open(
-        os.path.join(HERE, 'test_credentials.json')))
+        os.path.join(HERE, credentials_file)))
 
 @pytest.fixture(scope='session')
 def agave(credentials):
@@ -251,6 +261,20 @@ def test_list_jobs(agave):
     for job in jobs:
         validate_job(job)
 
+def test_list_jobs_multiple(agave):
+    for i in range(1, 15):
+        jobs = agave.jobs.list()
+        for job in jobs:
+            validate_job(job)
+
+def test_list_single_job_many_times(agave):
+    jobs = agave.jobs.list()
+    job = jobs[0]
+    for i in range(1, 15):
+        agave.jobs.get(jobId=job.id)
+
+
+
 def test_submit_job(agave, test_job):
     job = agave.jobs.submit(body=test_job)
     validate_job(job)
@@ -258,6 +282,18 @@ def test_submit_job(agave, test_job):
     arsp = AgaveAsyncResponse(agave, job)
     # block until job finishes with a timeout of 3 minutes.
     assert arsp.result(180) == 'COMPLETE'
+
+def test_submit_archive_job(agave, test_job, credentials):
+    test_job['archive'] = True
+    test_job['archiveSystem'] = credentials['storage']
+    job = agave.jobs.submit(body=test_job)
+    validate_job(job)
+    # create an async object
+    arsp = AgaveAsyncResponse(agave, job)
+    # block until job finishes with a timeout of 3 minutes.
+    assert arsp.result(180) == 'COMPLETE'
+    # now check that the result was archived
+
 
 def test_get_profile(agave, credentials):
     prof = agave.profiles.get()
@@ -362,6 +398,15 @@ def test_delete_monitor(agave, credentials):
         if m.target == credentials['storage']:
             assert False
 
+def validate_postit(postit):
+    assert postit.url
+    assert postit.method
+
+def test_list_postits(agave):
+    postits = agave.postits.list()
+    for postit in postits:
+        validate_postit(postit)
+
 def validate_notification(n):
     assert n.id
     assert n.event
@@ -436,6 +481,15 @@ def test_notification_to_url(agave, credentials, test_storage_system):
     # assert len(rsp.json()) > 0
     # delete the notification
     agave.notifications.delete(uuid=n.id)
+
+# def test_jwt_client(credentials):
+#     ag = a.Agave(jwt=credentials['jwt'],
+#                  jwt_header_name=credentials['jwt_header'],
+#                  api_server=credentials['apiserver'])
+#     ag.apps.list()
+#     ag.systems.list()
+#     ag.jobs.list()
+#     ag.meta.listMetadata()
 
 def test_multiple_clients(agave, credentials):
     # create another client with same username/password & client key/secret
