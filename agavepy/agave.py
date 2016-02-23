@@ -418,6 +418,7 @@ class Agave(object):
             rsp = with_refresh(self.client, f, download_url,
                                headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
                                verify=self.verify)
+            rsp.raise_for_status()
             if type(rsp) == dict:
                 raise AgaveError("Error downloading file at URI: {}, Response: {}".format(uri, rsp))
             for block in rsp.iter_content(1024):
