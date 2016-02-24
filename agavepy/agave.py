@@ -148,12 +148,13 @@ class Token(object):
     def __init__(self,
                  username, password,
                  api_server, api_key, api_secret, verify,
-                 parent, _token=None, _refresh_token=None):
+                 parent, _token=None, _refresh_token=None, admin_password=None):
         self.username = username
         self.password = password
         self.api_server = api_server
         self.api_key = api_key
         self.api_secret = api_secret
+        self.admin_password = admin_password
         # Agave object that created this token
         self.parent = parent
         self.verify = verify
@@ -189,8 +190,12 @@ class Token(object):
     def create(self):
         data = {'grant_type': 'password',
                 'username': self.username,
-                'password': self.password,
                 'scope': 'PRODUCTION'}
+        if self.admin_password:
+            data['grant_type'] = 'admin_password'
+            data['adminPassword'] = self.admin_password
+        else:
+            data['password'] = self.password
         return self._token(data)
 
     def refresh(self):
@@ -210,6 +215,7 @@ class Agave(object):
         # param name, mandatory?, attr_name, default
         ('username', False, 'username', None),
         ('password', False, 'password', None),
+        ('admin_password', False, 'admin_password', None),
         ('jwt', False, 'jwt', None),
         ('jwt_header_name', False, 'header_name', None),
         ('api_server', True, 'api_server', None),
@@ -265,7 +271,7 @@ class Agave(object):
             d = {'token': self.token.token_info.get('access_token'),
                  'refresh_token': self.token.token_info.get('refresh_token')}
         return d.update({attr: getattr(self, attr) for _, _, attr, _ in self.PARAMS \
-                         if not attr in ['resources', '_token', '_refresh_token', 'header_name', 'jwt', 'password']})
+                         if not attr in ['resources', '_token', '_refresh_token', 'header_name', 'jwt', 'password', 'admin_password']})
 
     @classmethod
     def agpy_path(self):
@@ -373,7 +379,7 @@ class Agave(object):
             self.username, self.password,
             self.api_server, self.api_key, self.api_secret,
             self.verify,
-            self, self._token, self._refresh_token)
+            self, self._token, self._refresh_token, self.admin_password)
         # check token cache for a valid token:
         token_info = self.token_cache.read_token_data()
         if token_info and time.time() + 5 < token_info['expiration']:
