@@ -273,7 +273,8 @@ class Agave(object):
         places = [os.path.expanduser('~/.agpy'),
                   '/etc/.agpy',
                   '/root/.agpy',
-                  '/.agpy']
+                  '/.agpy',
+                  '/staging/.agpy']
         for place in places:
             if os.path.exists(place):
                 return place
