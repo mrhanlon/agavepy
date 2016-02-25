@@ -280,7 +280,7 @@ class Agave(object):
                   '/etc/.agpy',
                   '/root/.agpy',
                   '/.agpy',
-                  '/staging/.agpy']
+                  '/host/home/eod/.agpy',]
         for place in places:
             if os.path.exists(place):
                 return place
