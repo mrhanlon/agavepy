@@ -273,7 +273,12 @@ def test_list_single_job_many_times(agave):
     for i in range(1, 15):
         agave.jobs.get(jobId=job.id)
 
-
+def test_search_jobs(agave):
+    # get the id of the first job from the full list
+    id = agave.jobs.list()[0].id
+    # use the search to filter for it:
+    jobs = agave.jobs.list(search={'id.like': id})
+    assert len(jobs) == 1
 
 def test_submit_job(agave, test_job):
     job = agave.jobs.submit(body=test_job)

@@ -104,6 +104,16 @@ class Operation(object):
                     raise TypeError(
                         "Missing required parameter '%s' for '%s'" %
                         (pname, self.json['nickname']))
+        if method.lower() == 'get':
+            # look for the search dictionary on GET requests:
+            value = kwargs.get('search')
+            if value:
+                if not isinstance(value, dict):
+                    raise TypeError("search parameter must be of type dict")
+                for k, v in value.items():
+                    params[k] = v
+                kwargs.pop('search')
+
         if kwargs:
             raise TypeError("'%s' does not have parameters %r" %
                             (self.json['nickname'], kwargs.keys()))
