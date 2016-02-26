@@ -568,6 +568,31 @@ def test_multiple_clients(agave, credentials):
     for app in apps:
         validate_app(app)
 
+token_callback_calls = 0
+
+def test_token_callback(agave, credentials):
+
+    def sample_token_callback(**kwargs):
+        global token_callback_calls
+        token_callback_calls += 1
+        assert kwargs['access_token']
+        assert kwargs['refresh_token']
+        assert kwargs['created_at']
+        assert kwargs['expires_at']
+
+    # create a client with a token callback:
+    ag = a.Agave(username=credentials.get('username'),
+                  password=credentials.get('password'),
+                  api_server=credentials.get('apiserver'),
+                  api_key=credentials.get('apikey'),
+                  api_secret=credentials.get('apisecret'),
+                  verify=credentials.get('verify_certs', True),
+                  token_callback=sample_token_callback)
+    # once created, let's force a refresh
+    ag.token.refresh()
+    global token_callback_calls
+    assert token_callback_calls >= 1
+
 
 def test_token_access(agave, credentials):
     # only run test when constructing the client with a refresh token
