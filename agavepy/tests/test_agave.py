@@ -35,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 @pytest.fixture(scope='session')
 def credentials():
     credentials_file = os.environ.get('creds', 'test_credentials.json')
+    print "Using: {}".format(credentials_file)
     return json.load(open(
         os.path.join(HERE, credentials_file)))
 
@@ -143,7 +144,7 @@ def test_add_storage_system(agave, test_storage_system):
     url = agave.api_server + '/systems/v2/' + test_storage_system['id']
     try:
         rsp = requests.put(url, data={'action':'setDefault'},
-                           headers={'Authorization': 'Bearer ' + agave._token},
+                       headers={'Authorization': 'Bearer ' + agave._token},
                        verify=agave.verify)
     except requests.exceptions.HTTPError as exc:
         print "Error trying to set storage system as default:", str(exc)
@@ -313,6 +314,12 @@ def test_submit_archive_job(agave, test_job, credentials):
     assert arsp.result(180) == 'FINISHED'
     # now check that the result was archived
 
+
+def test_geturl(agave):
+    job = agave.jobs.list()[0]
+    url = job._links['self']['href']
+    job_rsp = agave.geturl(url)
+    assert job_rsp.json().get('result').get('id') is not None
 
 def test_get_profile(agave, credentials):
     prof = agave.profiles.get()
@@ -544,7 +551,7 @@ def test_multiple_clients(agave, credentials):
 def test_token_access(agave, credentials):
     # only run test when constructing the client with a refresh token
     if not hasattr(agave.token, 'token_info') or agave.token.token_info.get('refresh_token') is None:
-        print("Skipping test_token_access.")
+        print "Skipping test_token_access."
         return
     token = agave.token.refresh()
     token_client = a.Agave(api_server=credentials['apiserver'],
