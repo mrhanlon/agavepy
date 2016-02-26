@@ -225,7 +225,7 @@ class Agave(object):
         ('token', False, '_token', None),
         ('refresh_token', False, '_refresh_token', None),
         ('resources', False, 'resources', None),
-        ('verify', False, 'verify', True)
+        ('verify', False, 'verify', True),
     ]
 
     def __init__(self, **kwargs):
@@ -387,7 +387,7 @@ class Agave(object):
             self._refresh_token = token_info['refresh_token']
             self.token.token_info = token_info
         # if a token was passed to the agave constructor, use that.
-        elif self._token and self._refresh_token:
+        elif self._token:
             pass
         else:
             self.token.create()
@@ -400,7 +400,7 @@ class Agave(object):
         """
         f = requests.get
         return with_refresh(self.client, f, url,
-                            headers={'Authorization': 'Bearer ' + self.token.token_info['access_token']},
+                            headers={'Authorization': 'Bearer ' + self._token},
                             verify=self.verify)
 
     def download_uri(self, uri, local_path):
