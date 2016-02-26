@@ -4198,10 +4198,13 @@
                                 "name": "message"
                             },
                             "result": {
-                                "type": "PermissionListing",
+                                "items": {
+                                    "$ref": "Permission"
+                                },
+                                "type": "array",
+                                "description": "response body",
                                 "name": "result"
-                            }
-                        },
+                            }                        },
                         "id": "JobPermissionResponse",
                         "name": ""
                     },
