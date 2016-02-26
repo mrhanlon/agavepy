@@ -511,8 +511,11 @@ def test_notification_to_url(agave, credentials, test_storage_system):
     agave.notifications.delete(uuid=n.id)
 
 def test_multiple_clients(agave, credentials):
-    # only run test when constructing the client with a refresh token
-    if not hasattr(agave.token, 'token_info') or agave.token.token_info.get('refresh_token') is None:
+    # only run test when constructing the client with username, password and refresh token
+    if not hasattr(agave.token, 'token_info') \
+            or agave.token.token_info.get('refresh_token') is None \
+            or credentials['username'] is None \
+            or credentials['password'] is None:
         print("Skipping test_token_access.")
         return
     # create another client with same username/password & client key/secret
@@ -546,6 +549,24 @@ def test_multiple_clients(agave, credentials):
     # check tokens for each -- they should be the same.
     assert agave.token.token_info['access_token'] == ag.token.token_info['access_token']
     assert ag.token.token_info['access_token'] == ag2.token.token_info['access_token']
+    # finally, let's smoke the tokens in the cache by calling the refresh token endpoint directly:
+    data = {'refresh_token': agave.token.token_info['refresh_token'],
+            'grant_type': 'refresh_token',
+            'scope': 'PRODUCTION',}
+    auth = requests.auth.HTTPBasicAuth(agave.api_key, agave.api_secret)
+    resp = requests.post(agave.token.token_url, data=data, auth=auth,
+                             verify=agave.verify)
+    resp.raise_for_status()
+    # the tokens in the cache are bunk now, but we should still be able to make things work
+    # if the client has a username and password
+    ag.apps.list()
+    for app in apps:
+        validate_app(app)
+    # this should have updated the cache with a good token. how we should be able to use the client
+    # that only had a refresh token:
+    ag2.apps.list()
+    for app in apps:
+        validate_app(app)
 
 
 def test_token_access(agave, credentials):

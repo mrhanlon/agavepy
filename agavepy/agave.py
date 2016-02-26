@@ -86,14 +86,16 @@ def with_refresh(client, f, *args, **kwargs):
                 if 'Invalid Credentials' in exc_json.get('fault').get('message'):
                     # check to see if token cache is different:
                     cache_info = client.token_cache.read_token_data()
-                    if cache_info and not (cache_info.get('access_token') ==
-                    client.token.token_info['access_token']):
+                    if cache_info \
+                            and cache_info.get('access_token') \
+                            and cache_info.get('refresh_token') \
+                            and not (cache_info.get('access_token') == client.token.token_info['access_token']):
                         client.token.token_info = cache_info
                         client._token = client.token.token_info['access_token']
                         client._refresh_token = client.token.token_info['refresh_token']
                         client.refresh_aris()
                         if time.time() < client.token.token_info['expiration'] + 5:
-                            return f(*args, **kwargs)
+                            return with_refresh(client, f, *args, **kwargs)
                     client.token.refresh()
                     return f(*args, **kwargs)
                 #  otherwise, return the JSON
@@ -202,7 +204,16 @@ class Token(object):
         data = {'grant_type': 'refresh_token',
                 'scope': 'PRODUCTION',
                 'refresh_token': self.token_info['refresh_token']}
-        return self._token(data)
+        try:
+            return self._token(data)
+        # if the refresh token has expired, let's try to create a new token:
+        except requests.HTTPError as e:
+            # if username and password are defined, try to create a new token:
+            if self.username and self.password and self.api_key and self.api_secret:
+                self.create()
+            else:
+                raise e
+
 
 
 class AgaveError(Exception):
