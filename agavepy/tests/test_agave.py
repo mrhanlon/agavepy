@@ -40,13 +40,14 @@ def credentials():
 
 @pytest.fixture(scope='session')
 def agave(credentials):
-    aga = a.Agave(username=credentials['username'],
-                  password=credentials['password'],
-                  api_server=credentials['apiserver'],
-                  api_key=credentials['apikey'],
-                  api_secret=credentials['apisecret'],
+    aga = a.Agave(username=credentials.get('username'),
+                  password=credentials.get('password'),
+                  api_server=credentials.get('apiserver'),
+                  api_key=credentials.get('apikey'),
+                  api_secret=credentials.get('apisecret'),
+                  token=credentials.get('token'),
+                  refresh_token=credentials.get('refresh_token'),
                   verify=credentials.get('verify_certs', True))
-    aga.token.create()
     return aga
 
 @pytest.fixture(scope='session')
@@ -129,7 +130,7 @@ def test_add_compute_system(agave, test_compute_system):
     url = agave.api_server + '/systems/v2/' + test_compute_system['id']
     try:
         rsp = requests.put(url, data={'action':'setDefault'},
-                           headers={'Authorization': 'Bearer ' + agave.token.token_info['access_token']},
+                           headers={'Authorization': 'Bearer ' + agave._token},
                            verify=agave.verify)
     except requests.exceptions.HTTPError as exc:
         print "Error trying to register compute system:", str(exc)
@@ -142,7 +143,7 @@ def test_add_storage_system(agave, test_storage_system):
     url = agave.api_server + '/systems/v2/' + test_storage_system['id']
     try:
         rsp = requests.put(url, data={'action':'setDefault'},
-                       headers={'Authorization': 'Bearer ' + agave.token.token_info['access_token']},
+                           headers={'Authorization': 'Bearer ' + agave._token},
                        verify=agave.verify)
     except requests.exceptions.HTTPError as exc:
         print "Error trying to set storage system as default:", str(exc)
@@ -170,7 +171,10 @@ def test_add_app(agave, test_app):
     app = agave.apps.add(body=test_app)
     validate_app(app)
 
-def test_list_clients(agave):
+def test_list_clients(agave, credentials):
+    if not credentials.get('username') or not credentials.get('password'):
+        print "Skipping test_list_clients"
+        return
     clients = agave.clients.list()
     for client in clients:
         validate_client(client)
@@ -197,7 +201,7 @@ def test_upload_file(agave, credentials):
                                  fileToUpload=open('test_file_upload_python_sdk', 'rb'))
     arsp = AgaveAsyncResponse(agave, rsp)
     status = arsp.result(timeout=120)
-    assert status == 'COMPLETE'
+    assert status == 'FINISHED'
 
 def test_upload_binary_file(agave, credentials):
     rsp = agave.files.importData(systemId=credentials['storage'],
@@ -205,7 +209,7 @@ def test_upload_binary_file(agave, credentials):
                                  fileToUpload=open('test_upload_python_sdk_g_art.mov', 'rb'))
     arsp = AgaveAsyncResponse(agave, rsp)
     status = arsp.result(timeout=120)
-    assert status == 'COMPLETE'
+    assert status == 'FINISHED'
 
 def test_download_agave_uri(agave, credentials):
     remote_path = '{}/test_file_upload_python_sdk'.format(credentials['storage_user'])
@@ -280,13 +284,23 @@ def test_search_jobs(agave):
     jobs = agave.jobs.list(search={'id.like': id})
     assert len(jobs) == 1
 
+def validate_pem(pem):
+    assert pem.usernname
+    assert pem.permission
+
+def list_job_permissions(agave):
+    job = agave.jobs.list[0]
+    pems = agave.jobs.listPermissions(jobId=job.id)
+    for pem in pems:
+        validate_pem(pem)
+
 def test_submit_job(agave, test_job):
     job = agave.jobs.submit(body=test_job)
     validate_job(job)
     # create an async object
     arsp = AgaveAsyncResponse(agave, job)
     # block until job finishes with a timeout of 3 minutes.
-    assert arsp.result(180) == 'COMPLETE'
+    assert arsp.result(180) == 'FINISHED'
 
 def test_submit_archive_job(agave, test_job, credentials):
     test_job['archive'] = True
@@ -296,17 +310,19 @@ def test_submit_archive_job(agave, test_job, credentials):
     # create an async object
     arsp = AgaveAsyncResponse(agave, job)
     # block until job finishes with a timeout of 3 minutes.
-    assert arsp.result(180) == 'COMPLETE'
+    assert arsp.result(180) == 'FINISHED'
     # now check that the result was archived
 
 
 def test_get_profile(agave, credentials):
     prof = agave.profiles.get()
-    validate_profile(prof, credentials['username'])
+    if credentials.get('username'):
+        validate_profile(prof, credentials['username'])
 
 def test_list_profiles(agave, credentials):
     prof = agave.profiles.listByUsername(username='me')
-    validate_profile(prof, credentials['username'])
+    if credentials.get('username'):
+        validate_profile(prof, credentials['username'])
 
 def test_list_systems(agave):
     systems = agave.systems.list()
@@ -487,22 +503,17 @@ def test_notification_to_url(agave, credentials, test_storage_system):
     # delete the notification
     agave.notifications.delete(uuid=n.id)
 
-# def test_jwt_client(credentials):
-#     ag = a.Agave(jwt=credentials['jwt'],
-#                  jwt_header_name=credentials['jwt_header'],
-#                  api_server=credentials['apiserver'])
-#     ag.apps.list()
-#     ag.systems.list()
-#     ag.jobs.list()
-#     ag.meta.listMetadata()
-
 def test_multiple_clients(agave, credentials):
+    # only run test when constructing the client with a refresh token
+    if not hasattr(agave.token, 'token_info') or agave.token.token_info.get('refresh_token') is None:
+        print("Skipping test_token_access.")
+        return
     # create another client with same username/password & client key/secret
-    ag = a.Agave(username=credentials['username'],
-                  password=credentials['password'],
-                  api_server=credentials['apiserver'],
-                  api_key=credentials['apikey'],
-                  api_secret=credentials['apisecret'],
+    ag = a.Agave(username=credentials.get('username'),
+                  password=credentials.get('password'),
+                  api_server=credentials.get('apiserver'),
+                  api_key=credentials.get('apikey'),
+                  api_secret=credentials.get('apisecret'),
                   verify=credentials.get('verify_certs', True))
     # use the original client to list apps
     apps = agave.apps.list()
@@ -511,10 +522,9 @@ def test_multiple_clients(agave, credentials):
     # create another client with same client key & secret but just access and refresh token
     ag2 = a.Agave(token=agave.token.token_info['access_token'],
                   refresh_token=agave.token.token_info['refresh_token'],
-                  password=credentials['password'],
-                  api_server=credentials['apiserver'],
-                  api_key=credentials['apikey'],
-                  api_secret=credentials['apisecret'],
+                  api_server=credentials.get('apiserver'),
+                  api_key=credentials.get('apikey'),
+                  api_secret=credentials.get('apisecret'),
                   verify=credentials.get('verify_certs', True))
     # use ag to list apps; this should use the cached token
     ag.apps.list()
@@ -532,6 +542,10 @@ def test_multiple_clients(agave, credentials):
 
 
 def test_token_access(agave, credentials):
+    # only run test when constructing the client with a refresh token
+    if not hasattr(agave.token, 'token_info') or agave.token.token_info.get('refresh_token') is None:
+        print("Skipping test_token_access.")
+        return
     token = agave.token.refresh()
     token_client = a.Agave(api_server=credentials['apiserver'],
                            token=token,
