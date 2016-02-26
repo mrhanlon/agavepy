@@ -285,11 +285,11 @@ def test_search_jobs(agave):
     assert len(jobs) == 1
 
 def validate_pem(pem):
-    assert pem.usernname
+    assert pem.username
     assert pem.permission
 
-def list_job_permissions(agave):
-    job = agave.jobs.list[0]
+def test_list_job_permissions(agave):
+    job = agave.jobs.list()[0]
     pems = agave.jobs.listPermissions(jobId=job.id)
     for pem in pems:
         validate_pem(pem)
