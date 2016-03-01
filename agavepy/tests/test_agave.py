@@ -360,6 +360,19 @@ def test_list_default_systems(agave):
         validate_system(system)
         assert system.get('default')
 
+def validate_role(role):
+    assert role.username
+    assert role.role
+
+def test_list_system_roles(agave, credentials):
+    roles = agave.systems.listRoles(systemId=credentials['storage'])
+    for role in roles:
+        validate_role(role)
+
+def test_get_system_role_for_user(agave, credentials):
+    role = agave.systems.getRoleForUser(systemId=credentials['storage'], username=credentials['username'])
+    validate_role(role)
+
 def test_list_metadata(agave):
     md = agave.meta.listMetadata()
     assert len(md) > 0
